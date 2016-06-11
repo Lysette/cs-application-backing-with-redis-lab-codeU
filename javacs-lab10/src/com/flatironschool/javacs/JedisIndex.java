@@ -31,6 +31,18 @@ public class JedisIndex {
 		this.jedis = jedis;
 	}
 	
+	/*
+	
+	term counters - map
+		name: TermCounter:[url]
+		key: string
+		value: int
+	
+	set of tc - set
+		name: URLSet:[term]
+		values: tc names
+	*/
+	
 	/**
 	 * Returns the Redis key for a given search term.
 	 * 
@@ -49,6 +61,9 @@ public class JedisIndex {
 		return "TermCounter:" + url;
 	}
 
+	private String getTermCounterKey(String TCKey) {
+		return TCKey.split(":", 2)[1];
+	}
 	/**
 	 * Checks whether we have a TermCounter for a given URL.
 	 * 
@@ -67,8 +82,19 @@ public class JedisIndex {
 	 * @return Set of URLs.
 	 */
 	public Set<String> getURLs(String term) {
-        // FILL THIS IN!
-		return null;
+        // TODO
+		String urlKey = urlSetKey(term);
+		
+		// set of tc (has url)
+		Set<String> tcSet = jedis.smembers(urlKey);
+		
+		// go thru each tc and get url (part after ':')
+		Set<String> urls = new HashSet<String>();
+		for (String tc : tcSet) {
+			urls.add(getTermCounterKey(tc));
+		}
+		
+		return urls;
 	}
 
     /**
@@ -78,8 +104,21 @@ public class JedisIndex {
 	 * @return Map from URL to count.
 	 */
 	public Map<String, Integer> getCounts(String term) {
-        // FILL THIS IN!
-		return null;
+        // TODO
+		String urlKey = urlSetKey(term);
+		
+		// set of tc 
+		Set<String> tcSet = jedis.smembers(urlKey);
+
+		Map<String, Integer> counts = new HashMap<String, Integer>();
+		
+		// get url and count
+		for (String tc: tcSet) {
+			String count = jedis.hget(tc, term);
+			counts.put(getTermCounterKey(tc), Integer.parseInt(count));
+		}
+		
+		return counts;
 	}
 
     /**
@@ -90,8 +129,9 @@ public class JedisIndex {
 	 * @return
 	 */
 	public Integer getCount(String url, String term) {
-        // FILL THIS IN!
-		return null;
+        // TODO
+		String count = jedis.hget(termCounterKey(url), term);
+		return Integer.parseInt(count);
 	}
 
 
@@ -102,7 +142,24 @@ public class JedisIndex {
 	 * @param paragraphs  Collection of elements that should be indexed.
 	 */
 	public void indexPage(String url, Elements paragraphs) {
-        // FILL THIS IN!
+        // TODO
+		
+		String tcKey = termCounterKey(url);
+		
+		// create tc
+		TermCounter tc = new TermCounter(url);
+		tc.processElements(paragraphs);
+		
+		// add tc items in redis tc and UrlSet
+		for (String key: tc.keySet()) {
+			// add to redis tc 
+			String count = String.valueOf(tc.get(key));
+			jedis.hset(tcKey, key, count);
+			
+			// add tc to urlSet
+			jedis.sadd(urlSetKey(key), tcKey);
+		}
+		
 	}
 
 	/**
@@ -135,7 +192,7 @@ public class JedisIndex {
 		Set<String> keys = urlSetKeys();
 		Set<String> terms = new HashSet<String>();
 		for (String key: keys) {
-			String[] array = key.split(":");
+			String[] array = key.split(":", 2);
 			if (array.length < 2) {
 				terms.add("");
 			} else {
@@ -223,15 +280,19 @@ public class JedisIndex {
 		Jedis jedis = JedisMaker.make();
 		JedisIndex index = new JedisIndex(jedis);
 		
-		//index.deleteTermCounters();
-		//index.deleteURLSets();
-		//index.deleteAllKeys();
+		index.deleteTermCounters();
+		index.deleteURLSets();
+		index.deleteAllKeys();
+		//index.printIndex(); // delete after
 		loadIndex(index);
-		
+		//index.printIndex(); // delete after
+
 		Map<String, Integer> map = index.getCounts("the");
 		for (Entry<String, Integer> entry: map.entrySet()) {
 			System.out.println(entry);
 		}
+		
+		
 	}
 
 	/**
@@ -250,5 +311,6 @@ public class JedisIndex {
 		url = "https://en.wikipedia.org/wiki/Programming_language";
 		paragraphs = wf.readWikipedia(url);
 		index.indexPage(url, paragraphs);
+		
 	}
 }

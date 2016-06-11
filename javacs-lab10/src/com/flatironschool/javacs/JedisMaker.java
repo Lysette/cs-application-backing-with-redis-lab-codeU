@@ -12,7 +12,6 @@ import java.net.URL;
 
 import redis.clients.jedis.Jedis;
 
-
 public class JedisMaker {
 
 	/**
@@ -24,7 +23,7 @@ public class JedisMaker {
 	public static Jedis make() throws IOException {
 		// assemble the file name
 		String slash = File.separator;
-		String filename = "resources" + slash + "redis_url.txt";
+		String filename = "resources" + '/' + "redis_url.txt";
 
 		URL fileURL = JedisMaker.class.getClassLoader().getResource(filename);
 
